@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:c="http://www.springframework.org/schema/c" xmlns:jaxws="http://cxf.apache.org/jaxws"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.3.xsd
+			http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.3.xsd
+			http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd
+		    http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.3.xsd
+			http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.2.xsd">
+
+	<bean id="configRealm"
+		class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+		<property name="locations">
+			<list>
+				<value>classpath:config/content.properties</value>
+				<value>classpath:config/jdbc.properties</value>
+				<value>classpath:config/redis.properties</value>
+			</list>
+		</property>
+	</bean>
+	<bean id="propertyConfigurer"
+		class="org.springframework.beans.factory.config.PreferencesPlaceholderConfigurer">
+		<property name="properties" ref="configRealm" />
+	</bean>
+
+	<!-- 慢SQL记录 -->
+	<bean id="stat-filter" class="com.alibaba.druid.filter.stat.StatFilter">
+		<property name="slowSqlMillis" value="100" />
+		<property name="logSlowSql" value="true" />
+		<!-- SQL合并配置 -->
+		<property name="mergeSql" value="true" />
+	</bean>
+	<!-- 配置 wallfilter -->
+	<bean id="wall-filter" class="com.alibaba.druid.wall.WallFilter">
+		<property name="dbType" value="oracle" />
+	</bean>
+
+	<bean id="log-filter" class="com.alibaba.druid.filter.logging.Log4j2Filter">
+		<!-- 缺省输入的日志信息全面，但是内容比较多，有时候我们需要定制化配置日志输出。 -->
+		<property name="resultSetLogEnabled" value="false" />
+		<!-- 所有DataSource相关的日志 -->
+		<property name="dataSourceLogEnabled" value="true" />
+		<!-- 输出可执行的SQL -->
+		<property name="statementExecutableSqlLogEnable" value="true" />
+		<property name="statementCreateAfterLogEnabled" value="false" />
+		<property name="statementCloseAfterLogEnabled" value="false" />
+		<property name="resultSetOpenAfterLogEnabled" value="false" />
+		<property name="resultSetCloseAfterLogEnabled" value="false" />
+	</bean>
+
+	<bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource"
+		destroy-method="close">
+		<property name="url" value="${url}" />
+		<property name="username" value="${username}" />
+		<property name="password" value="${password}" />
+		<!-- 初始化连接大小 -->
+		<property name="initialSize" value="${initialSize}"></property>
+		<!-- 连接池最大数量 -->
+		<property name="maxActive" value="${maxActive}"></property>
+		<!-- 连接池最小空闲 -->
+		<property name="minIdle" value="${minIdle}"></property>
+		<!-- 获取连接最大等待时间 -->
+		<property name="maxWait" value="${maxWait}"></property>
+		<!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->
+		<property name="timeBetweenEvictionRunsMillis" value="${timeBetweenEvictionRunsMillis}" />
+		<!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->
+		<property name="minEvictableIdleTimeMillis" value="${minEvictableIdleTimeMillis}" />
+		<!-- 用来检测连接是否有效的sql，要求是一个查询语句，常用select 'x'。如果validationQuery为null，testOnBorrow、testOnReturn、testWhileIdle都不会起作用。 -->
+		<property name="validationQuery" value="SELECT 1 FROM DUAL" />
+		<!-- 建议配置为true，不影响性能，并且保证安全性。申请连接的时候检测，如果空闲时间大于timeBetweenEvictionRunsMillis，执行validationQuery检测连接是否有效。 -->
+		<property name="testWhileIdle" value="true" />
+		<!-- 申请连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。 -->
+		<property name="testOnBorrow" value="false" />
+		<!-- 归还连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。 -->
+		<property name="testOnReturn" value="false" />
+		<!-- 是否缓存preparedStatement，也就是PSCache。PSCache对支持游标的数据库性能提升巨大，比如说oracle。在mysql下建议关闭。 -->
+		<property name="poolPreparedStatements" value="true" />
+		<!-- 要启用PSCache，必须配置大于0，当大于0时，poolPreparedStatements自动触发修改为true。在Druid中，不会存在Oracle下PSCache占用内存过多的问题，可以把这个数值配置大一些，比如说100 -->
+		<property name="maxPoolPreparedStatementPerConnectionSize"
+			value="20" />
+
+		<!-- 配置监控统计拦截的filters -->
+		<!-- 使用配置的WallFilter -->
+		<property name="proxyFilters">
+			<list>
+				<!-- <ref bean="log-filter" /> -->
+				<ref bean="stat-filter" />
+				<ref bean="wall-filter"/>
+			</list>
+		</property>
+		<!-- 合并多个DruidDataSource的监控数据 -->
+		<property name="useGlobalDataSourceStat" value="true" />
+	</bean>
+	<!-- JDBC模板 -->
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+
+	<tx:annotation-driven transaction-manager="transactionManager" />
+
+	<bean id="dbSupport" class="com.lanswon.generator.rich.DbSupport">
+		<property name="dataSource" ref="dataSource"></property>
+		<property name="showNull" value="true"></property>
+		<property name="defaultValue" value=""></property>
+	</bean>
+
+	<context:component-scan base-package="com.lanswon" />
+
+	<mvc:annotation-driven />
+	<!-- Druid提供了Spring和Jdbc的关联监控。 -->
+	<bean id="druid-stat-interceptor"
+		class="com.alibaba.druid.support.spring.stat.DruidStatInterceptor">
+	</bean>
+
+	<bean id="druid-stat-pointcut" class="org.springframework.aop.support.JdkRegexpMethodPointcut"
+		scope="prototype">
+		<property name="patterns">
+			<list>
+				<value>com.lanswon.controller.*</value>
+			</list>
+		</property>
+	</bean>
+	<aop:config>
+		<aop:advisor advice-ref="druid-stat-interceptor"
+			pointcut-ref="druid-stat-pointcut" />
+	</aop:config>
+
+	<!-- 对所有的请求拦截使用/** ,对某个模块下的请求拦截使用：/myPath/* -->
+	<!-- <mvc:interceptors> <mvc:interceptor> <mvc:mapping path="/**" /> <mvc:exclude-mapping
+		path="/user/public/login" /> <mvc:exclude-mapping path="/user/public/register"
+		/> <ref bean="protalHandlerInterceptor" /> </mvc:interceptor> </mvc:interceptors>
+		<bean id="protalHandlerInterceptor" class="com.lanswon.interceptor.ProtalHandlerInterceptor"></bean> -->
+	<import resource="applicationContext-Redis.xml" />
+</beans>
